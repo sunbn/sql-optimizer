@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head}"></head>
+<body>
+    <div th:replace="~{fragments/layout :: sidebar}"></div>
+
+    <div class="main-content">
+        <div class="container-fluid">
+            <h3 class="mb-4" th:text="${pageTitle}">SQL分析</h3>
+
+            <div class="row">
+                <!-- SQL输入区域 -->
+                <div class="col-lg-8">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <i class="bi bi-code-square"></i> SQL语句
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label">选择数据源（可选）</label>
+                                <select class="form-select" id="dataSourceId">
+                                    <option value="">不连接数据库（仅语法分析）</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">SQL语句</label>
+                                <textarea class="form-control sql-editor" id="sqlContent" rows="8" placeholder="请输入SQL语句...&#10;例如：SELECT * FROM users WHERE id = 1"></textarea>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-primary" onclick="analyzeSql()">
+                                    <i class="bi bi-play-fill"></i> 开始分析
+                                </button>
+                                <button class="btn btn-outline-secondary" onclick="clearAll()">
+                                    <i class="bi bi-trash"></i> 清空
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 分析结果 -->
+                    <div id="resultArea" style="display:none;">
+                        <!-- 评分卡片 -->
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <i class="bi bi-award"></i> 分析评分
+                            </div>
+                            <div class="card-body text-center py-4">
+                                <div id="scoreCircle" class="score-circle score-good mb-3">95</div>
+                                <h5 id="scoreText" class="text-success">优秀</h5>
+                                <p class="text-muted mb-0">SQL类型：<span id="sqlType">SELECT</span> | 涉及表：<span id="tables">users</span></p>
+                            </div>
+                        </div>
+
+                        <!-- 优化建议 -->
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <i class="bi bi-lightbulb"></i> 优化建议
+                            </div>
+                            <div class="card-body" id="optimizationTips">
+                            </div>
+                        </div>
+
+                        <!-- 索引建议 -->
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <i class="bi bi-diagram-3"></i> 索引建议
+                            </div>
+                            <div class="card-body" id="indexSuggestions">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 右侧信息 -->
+                <div class="col-lg-4">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <i class="bi bi-info-circle"></i> 使用说明
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted small">输入SQL语句后点击分析，系统将自动检测以下问题：</p>
+                            <ul class="text-muted small">
+                                <li>SELECT * 查询</li>
+                                <li>LIKE前缀模糊查询</li>
+                                <li>子查询优化</li>
+                                <li>OR条件优化</li>
+                                <li>LIMIT大偏移量</li>
+                                <li>IN子句数量过多</li>
+                                <li>隐式类型转换</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <i class="bi bi-clock-history"></i> 最近分析
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted small text-center mb-0">暂无分析记录</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div th:replace="~{fragments/layout :: scripts}"></div>
+    <script>
+        function analyzeSql() {
+            const sql = document.getElementById('sqlContent').value.trim();
+            if (!sql) {
+                alert('请输入SQL语句');
+                return;
+            }
+
+            const btn = document.querySelector('button[onclick="analyzeSql()"]');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="bi bi-hourglass-split"></i> 分析中...';
+
+            fetch('/api/sql/analyze', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sqlContent: sql,
+                    dataSourceId: document.getElementById('dataSourceId').value || null,
+                    executeExplain: true,
+                    generateIndexAdvice: true,
+                    checkOptimizationRules: true
+                })
+            })
+            .then(r => r.json())
+            .then(data => {
+                showResult(data.data);
+            })
+            .catch(err => {
+                alert('分析失败：' + err.message);
+            })
+            .finally(() => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-play-fill"></i> 开始分析';
+            });
+        }
+
+        function showResult(result) {
+            document.getElementById('resultArea').style.display = 'block';
+
+            // 评分
+            const score = result.score || 0;
+            const circle = document.getElementById('scoreCircle');
+            circle.textContent = score;
+            circle.className = 'score-circle mb-3 ' + (score >= 80 ? 'score-good' : score >= 60 ? 'score-warning' : 'score-bad');
+            document.getElementById('scoreText').textContent = score >= 80 ? '优秀' : score >= 60 ? '一般' : '需优化';
+            document.getElementById('scoreText').className = score >= 80 ? 'text-success' : score >= 60 ? 'text-warning' : 'text-danger';
+
+            // SQL类型和表
+            document.getElementById('sqlType').textContent = result.sqlType || '-';
+            document.getElementById('tables').textContent = (result.tables || []).join(', ') || '-';
+
+            // 优化建议
+            const tipsHtml = (result.optimizationTips || []).map(tip => {
+                const priorityClass = tip.priority >= 8 ? 'priority-high' : tip.priority >= 5 ? 'priority-medium' : 'priority-low';
+                const priorityText = tip.priority >= 8 ? '高' : tip.priority >= 5 ? '中' : '低';
+                return `<div class="tip-item ${priorityClass}">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <strong>${tip.ruleName}</strong>
+                            <span class="badge bg-secondary ms-2">${priorityText}优先级</span>
+                        </div>
+                    </div>
+                    <p class="text-muted small mb-1 mt-1">${tip.description}</p>
+                    <p class="text-primary small mb-0"><i class="bi bi-arrow-right-circle"></i> ${tip.suggestion}</p>
+                </div>`;
+            }).join('');
+            document.getElementById('optimizationTips').innerHTML = tipsHtml || '<p class="text-muted text-center mb-0">未发现优化问题</p>';
+
+            // 索引建议
+            const indexHtml = (result.indexSuggestions || []).map(idx => `
+                <div class="index-suggestion">
+                    <div class="d-flex justify-content-between">
+                        <strong>表：${idx.tableName}</strong>
+                        <span class="badge bg-primary">${idx.indexType}</span>
+                    </div>
+                    <div class="mt-2">
+                        <code class="bg-white px-2 py-1 rounded">CREATE INDEX idx_${idx.tableName}_${idx.indexColumns.replace(/, /g, '_')} ON ${idx.tableName}(${idx.indexColumns});</code>
+                    </div>
+                    <p class="text-muted small mb-1 mt-2">${idx.reason}</p>
+                    <p class="text-success small mb-0"><i class="bi bi-graph-up"></i> ${idx.estimatedImprovement}</p>
+                </div>
+            `).join('');
+            document.getElementById('indexSuggestions').innerHTML = indexHtml || '<p class="text-muted text-center mb-0">暂无索引建议</p>';
+
+            // 滚动到结果
+            document.getElementById('resultArea').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function clearAll() {
+            document.getElementById('sqlContent').value = '';
+            document.getElementById('resultArea').style.display = 'none';
+        }
+    </script>
+</body>
+</html>

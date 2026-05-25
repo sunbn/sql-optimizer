@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head}"></head>
+<body>
+    <div th:replace="~{fragments/layout :: sidebar}"></div>
+
+    <div class="main-content">
+        <div class="container-fluid">
+            <h3 class="mb-4" th:text="${pageTitle}">慢查询日志</h3>
+
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-clock-history"></i> 慢查询列表</span>
+                    <div class="d-flex gap-2">
+                        <select class="form-select form-select-sm" style="width: 150px;" id="filterStatus">
+                            <option value="">全部状态</option>
+                            <option value="0">未分析</option>
+                            <option value="1">已分析</option>
+                        </select>
+                        <button class="btn btn-sm btn-primary" onclick="refreshList()">
+                            <i class="bi bi-arrow-clockwise"></i> 刷新
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>SQL语句</th>
+                                    <th>执行时间</th>
+                                    <th>扫描行数</th>
+                                    <th>查询时间</th>
+                                    <th>状态</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr th:each="log : ${page.records}" th:if="${not #lists.isEmpty(page.records)}">
+                                    <td th:text="${log.id}">1</td>
+                                    <td>
+                                        <code class="small" th:text="${#strings.abbreviate(log.sqlContent, 80)}">SELECT * FROM...</code>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-danger" th:text="${log.executionTime + 'ms'}">1200ms</span>
+                                    </td>
+                                    <td th:text="${log.rowsExamined != null ? log.rowsExamined : '-'}">10000</td>
+                                    <td th:text="${log.queryTime != null ? #temporals.format(log.queryTime, 'yyyy-MM-dd HH:mm') : '-'}">2024-01-01</td>
+                                    <td>
+                                        <span class="badge badge-status" th:classappend="${log.analyzed == 1} ? 'bg-success' : 'bg-warning'"
+                                              th:text="${log.analyzed == 1} ? '已分析' : '未分析'">未分析</span>
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-primary" th:if="${log.analyzed == 0}" th:onclick="'analyzeSlowLog(' + ${log.id} + ')'">
+                                            <i class="bi bi-search"></i> 分析
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-info" data-bs-toggle="modal" data-bs-target="#sqlModal" th:onclick="'showSql(' + ${log.id} + ')'">
+                                            <i class="bi bi-eye"></i> 查看
+                                        </button>
+                                    </td>
+                                </tr>
+                                <tr th:if="${#lists.isEmpty(page.records)}">
+                                    <td colspan="7" class="text-center text-muted py-4">暂无慢查询记录</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- 分页 -->
+                    <nav class="p-3" th:if="${page.pages > 1}">
+                        <ul class="pagination justify-content-center mb-0">
+                            <li class="page-item" th:classappend="${page.current == 1} ? 'disabled'">
+                                <a class="page-link" th:href="@{/slowlog/page(current=${page.current - 1})}">上一页</a>
+                            </li>
+                            <li class="page-item" th:each="i : ${#numbers.sequence(1, page.pages)}" th:classappend="${i == page.current} ? 'active'">
+                                <a class="page-link" th:href="@{/slowlog/page(current=${i})}" th:text="${i}">1</a>
+                            </li>
+                            <li class="page-item" th:classappend="${page.current == page.pages} ? 'disabled'">
+                                <a class="page-link" th:href="@{/slowlog/page(current=${page.current + 1})}">下一页</a>
+                            </li>
+                        </ul>
+                    </nav>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SQL详情Modal -->
+    <div class="modal fade" id="sqlModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">SQL详情</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <pre class="sql-editor p-3" id="modalSqlContent"></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div th:replace="~{fragments/layout :: scripts}"></div>
+    <script>
+        function refreshList() {
+            location.reload();
+        }
+
+        function analyzeSlowLog(id) {
+            // 跳转到首页并填充SQL
+            fetch('/api/slowlog/' + id)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.data) {
+                        window.location.href = '/?sql=' + encodeURIComponent(data.data.sqlContent);
+                    }
+                });
+        }
+
+        function showSql(id) {
+            // 实际应该从后端获取完整SQL
+            document.getElementById('modalSqlContent').textContent = '-- SQL ID: ' + id;
+        }
+    </script>
+</body>
+</html>
