@@ -107,14 +107,41 @@ CREATE TABLE IF NOT EXISTS optimization_rule (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='优化规则表';
 
 -- 初始化优化规则数据
-INSERT INTO optimization_rule (rule_code, rule_name, rule_type, description, suggestion, priority) VALUES
-('RULE_SELECT_STAR', '避免SELECT *', 'PERFORMANCE', '使用SELECT *会返回所有列，增加网络传输和内存消耗', '明确指定需要的列，避免返回不必要的数据', 8),
-('RULE_MISSING_INDEX', '缺少索引', 'INDEX', 'WHERE条件中的列缺少索引，导致全表扫描', '为WHERE条件中的列添加索引', 10),
-('RULE_FULL_TABLE_SCAN', '全表扫描', 'PERFORMANCE', 'SQL执行计划中出现全表扫描', '优化查询条件或添加合适的索引', 9),
-('RULE_IMPLICIT_CONVERSION', '隐式类型转换', 'PERFORMANCE', 'WHERE条件中存在隐式类型转换，导致索引失效', '确保比较双方类型一致', 8),
-('RULE_LIKE_PREFIX', 'LIKE前缀模糊查询', 'PERFORMANCE', 'LIKE以%开头会导致索引失效', '考虑使用全文索引或优化查询方式', 7),
-('RULE_OR_CONDITION', 'OR条件优化', 'PERFORMANCE', 'OR条件可能导致索引失效', '考虑使用UNION ALL替代OR', 6),
-('RULE_SUBQUERY', '子查询优化', 'PERFORMANCE', '子查询可能导致性能问题', '考虑使用JOIN替代子查询', 6),
-('RULE_ORDER_BY', 'ORDER BY优化', 'PERFORMANCE', 'ORDER BY使用不当可能导致文件排序', '确保ORDER BY列有索引', 5),
-('RULE_LIMIT_OFFSET', 'LIMIT大偏移量', 'PERFORMANCE', 'LIMIT大偏移量会导致扫描大量数据', '使用覆盖索引或优化分页方式', 7),
-('RULE_IN_CLAUSE', 'IN子句数量过多', 'PERFORMANCE', 'IN子句中元素过多影响性能', '考虑使用临时表或分批处理', 5);
+INSERT INTO optimization_rule (rule_code, rule_name, rule_type, description, suggestion, priority, enabled) VALUES
+('RULE_SELECT_STAR', '避免SELECT *', 'PERFORMANCE', '使用SELECT *会返回所有列，增加网络传输和内存消耗', '明确指定需要的列，避免返回不必要的数据', 8, 1),
+('RULE_MISSING_INDEX', '缺少索引', 'INDEX', 'WHERE条件中的列缺少索引，导致全表扫描', '为WHERE条件中的列添加索引', 10, 1),
+('RULE_FULL_TABLE_SCAN', '全表扫描', 'PERFORMANCE', 'SQL执行计划中出现全表扫描', '优化查询条件或添加合适的索引', 9, 1),
+('RULE_IMPLICIT_CONVERSION', '隐式类型转换', 'PERFORMANCE', 'WHERE条件中存在隐式类型转换，导致索引失效', '确保比较双方类型一致', 8, 1),
+('RULE_LIKE_PREFIX', 'LIKE前缀模糊查询', 'PERFORMANCE', 'LIKE以%开头会导致索引失效', '考虑使用全文索引或优化查询方式', 7, 1),
+('RULE_OR_CONDITION', 'OR条件优化', 'PERFORMANCE', 'OR条件可能导致索引失效', '考虑使用UNION ALL替代OR', 6, 1),
+('RULE_SUBQUERY', '子查询优化', 'PERFORMANCE', '子查询可能导致性能问题', '考虑使用JOIN替代子查询', 6, 1),
+('RULE_ORDER_BY', 'ORDER BY优化', 'PERFORMANCE', 'ORDER BY使用不当可能导致文件排序', '确保ORDER BY列有索引', 5, 1),
+('RULE_LIMIT_OFFSET', 'LIMIT大偏移量', 'PERFORMANCE', 'LIMIT大偏移量会导致扫描大量数据', '使用覆盖索引或优化分页方式', 7, 1),
+('RULE_IN_CLAUSE', 'IN子句数量过多', 'PERFORMANCE', 'IN子句中元素过多影响性能', '考虑使用临时表或分批处理', 5, 1);
+
+-- ============================================
+-- 优化规则管理示例 SQL（根据需求执行）
+-- ============================================
+
+-- 1. 查看所有规则状态
+-- SELECT id, rule_code, rule_name, rule_type, priority, enabled, created_at 
+-- FROM optimization_rule;
+
+-- 2. 禁用某条规则（如关闭"避免SELECT *"）
+-- UPDATE optimization_rule SET enabled = 0 WHERE rule_code = 'RULE_SELECT_STAR';
+
+-- 3. 启用某条规则
+-- UPDATE optimization_rule SET enabled = 1 WHERE rule_code = 'RULE_SELECT_STAR';
+
+-- 4. 调整规则优先级（数字越大优先级越高，排序越靠前）
+-- UPDATE optimization_rule SET priority = 10 WHERE rule_code = 'RULE_MISSING_INDEX';
+-- UPDATE optimization_rule SET priority = 3 WHERE rule_code = 'RULE_IN_CLAUSE';
+
+-- 5. 修改规则描述或建议
+-- UPDATE optimization_rule 
+-- SET description = 'SELECT * 会返回所有列，增加网络传输和内存消耗，建议明确指定需要的列',
+--     suggestion = '只查询需要的字段，避免返回大字段（TEXT/BLOB）'
+-- WHERE rule_code = 'RULE_SELECT_STAR';
+
+-- 6. 重置所有规则为默认状态
+-- UPDATE optimization_rule SET enabled = 1, priority = DEFAULT;

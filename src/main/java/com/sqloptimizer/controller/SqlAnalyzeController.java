@@ -3,8 +3,10 @@ package com.sqloptimizer.controller;
 import com.sqloptimizer.dto.ApiResponse;
 import com.sqloptimizer.dto.SqlAnalyzeRequest;
 import com.sqloptimizer.dto.SqlAnalyzeResult;
+import com.sqloptimizer.entity.SqlAnalysisRecord;
 import com.sqloptimizer.service.ExplainService;
 import com.sqloptimizer.service.IndexAdviceService;
+import com.sqloptimizer.service.SqlAnalysisRecordService;
 import com.sqloptimizer.service.SqlParserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +28,7 @@ public class SqlAnalyzeController {
     private final SqlParserService sqlParserService;
     private final ExplainService explainService;
     private final IndexAdviceService indexAdviceService;
+    private final SqlAnalysisRecordService sqlAnalysisRecordService;
 
     /**
      * 分析SQL
@@ -83,6 +86,15 @@ public class SqlAnalyzeController {
             log.error("SQL分析失败", e);
             result.setStatus("FAILED");
             result.setErrorMsg(e.getMessage());
+        }
+
+        // 8. 保存分析结果到数据库
+        try {
+            SqlAnalysisRecord record = sqlAnalysisRecordService.saveAnalysisResult(
+                    request.getDataSourceId(), sql, result);
+            result.setRecordId(record.getId());
+        } catch (Exception e) {
+            log.error("保存分析结果失败", e);
         }
 
         return ApiResponse.success(result);

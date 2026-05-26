@@ -55,7 +55,7 @@ public class IndexAdvisor {
 
             // 获取涉及的表
             Statement statement = CCJSqlParserUtil.parse(sql);
-            Set<String> tables = new TablesNamesFinder().getTableList(statement);
+            List<String> tables = new TablesNamesFinder().getTableList(statement);
 
             for (String table : tables) {
                 // 为WHERE条件列建议索引

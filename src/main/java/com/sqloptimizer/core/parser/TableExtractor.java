@@ -29,7 +29,7 @@ public class TableExtractor {
         try {
             Statement statement = CCJSqlParserUtil.parse(sql);
             TablesNamesFinder tablesNamesFinder = new TablesNamesFinder();
-            Set<String> tableSet = tablesNamesFinder.getTableList(statement);
+            List<String> tableSet = tablesNamesFinder.getTableList(statement);
             return new ArrayList<>(tableSet);
         } catch (Exception e) {
             log.error("提取表名失败: {}", sql, e);
@@ -43,7 +43,7 @@ public class TableExtractor {
     public List<String> extractTables(Statement statement) {
         try {
             TablesNamesFinder tablesNamesFinder = new TablesNamesFinder();
-            Set<String> tableSet = tablesNamesFinder.getTableList(statement);
+            List<String> tableSet = tablesNamesFinder.getTableList(statement);
             return new ArrayList<>(tableSet);
         } catch (Exception e) {
             log.error("提取表名失败", e);
