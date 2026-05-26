@@ -8,6 +8,7 @@ import com.sqloptimizer.service.ExplainService;
 import com.sqloptimizer.service.IndexAdviceService;
 import com.sqloptimizer.service.SqlAnalysisRecordService;
 import com.sqloptimizer.service.SqlParserService;
+import com.sqloptimizer.util.SqlFormatter;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,6 +40,12 @@ public class SqlAnalyzeController {
 
         SqlAnalyzeResult result = new SqlAnalyzeResult();
         String sql = request.getSqlContent();
+
+        // 自动格式化 MyBatis XML SQL
+        if (SqlFormatter.isMybatisXmlSql(sql)) {
+            log.info("检测到MyBatis XML SQL，执行格式化");
+            sql = SqlFormatter.format(sql);
+        }
 
         try {
             // 1. 验证SQL语法
