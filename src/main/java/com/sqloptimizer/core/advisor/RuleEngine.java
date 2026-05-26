@@ -49,6 +49,36 @@ public class RuleEngine {
         // 检查隐式类型转换
         checkImplicitConversion(sql, tips);
 
+        // 检查索引列上使用函数
+        checkIndexFunction(sql, tips);
+
+        // 检查DELETE缺少WHERE
+        checkDeleteWithoutWhere(sql, tips);
+
+        // 检查UPDATE缺少WHERE
+        checkUpdateWithoutWhere(sql, tips);
+
+        // 检查笛卡尔积
+        checkCartesianProduct(sql, tips);
+
+        // 检查SQL注入风险
+        checkSqlInjectionRisk(sql, tips);
+
+        // 检查不必要的DISTINCT
+        checkUnnecessaryDistinct(sql, tips);
+
+        // 检查HAVING替代WHERE
+        checkHavingInsteadWhere(sql, tips);
+
+        // 检查关联子查询
+        checkCorrelatedSubquery(sql, tips);
+
+        // 检查大字段查询
+        checkLargeFieldQuery(sql, tips);
+
+        // 检查未使用绑定变量
+        checkNoBoundVariables(sql, tips);
+
         // 基于EXPLAIN结果检查
         if (explainResult != null) {
             checkExplainResult(explainResult, tips);
@@ -169,6 +199,159 @@ public class RuleEngine {
     }
 
     /**
+     * 检查索引列上使用函数
+     */
+    private void checkIndexFunction(String sql, List<SqlAnalyzeResult.OptimizationTip> tips) {
+        if (!optimizationRuleService.isEnabled("RULE_INDEX_FUNCTION")) {
+            return;
+        }
+        // 匹配 WHERE 条件中列被函数包裹的情况，如 YEAR(col), UPPER(col), DATE(col) 等
+        if (Pattern.compile("(?i)WHERE\\s+.*[a-zA-Z_][a-zA-Z0-9_]*\\s*\\(\\s*[a-zA-Z_][a-zA-Z0-9_]*\\s*\\)").matcher(sql).find()) {
+            SqlAnalyzeResult.OptimizationTip tip = createTip("RULE_INDEX_FUNCTION", 8);
+            if (tip != null) tips.add(tip);
+        }
+    }
+
+    /**
+     * 检查DELETE缺少WHERE
+     */
+    private void checkDeleteWithoutWhere(String sql, List<SqlAnalyzeResult.OptimizationTip> tips) {
+        if (!optimizationRuleService.isEnabled("RULE_DELETE_WITHOUT_WHERE")) {
+            return;
+        }
+        String lowerSql = sql.trim().toLowerCase();
+        if (lowerSql.startsWith("delete") && !lowerSql.contains("where")) {
+            SqlAnalyzeResult.OptimizationTip tip = createTip("RULE_DELETE_WITHOUT_WHERE", 10);
+            if (tip != null) tips.add(tip);
+        }
+    }
+
+    /**
+     * 检查UPDATE缺少WHERE
+     */
+    private void checkUpdateWithoutWhere(String sql, List<SqlAnalyzeResult.OptimizationTip> tips) {
+        if (!optimizationRuleService.isEnabled("RULE_UPDATE_WITHOUT_WHERE")) {
+            return;
+        }
+        String lowerSql = sql.trim().toLowerCase();
+        if (lowerSql.startsWith("update") && !lowerSql.contains("where")) {
+            SqlAnalyzeResult.OptimizationTip tip = createTip("RULE_UPDATE_WITHOUT_WHERE", 10);
+            if (tip != null) tips.add(tip);
+        }
+    }
+
+    /**
+     * 检查笛卡尔积（JOIN缺少ON条件）
+     */
+    private void checkCartesianProduct(String sql, List<SqlAnalyzeResult.OptimizationTip> tips) {
+        if (!optimizationRuleService.isEnabled("RULE_CARTESIAN_PRODUCT")) {
+            return;
+        }
+        String lowerSql = sql.toLowerCase();
+        // 包含JOIN关键字但没有ON关键字
+        if ((lowerSql.contains("join") || lowerSql.contains(",")) && !lowerSql.contains("on")) {
+            // 排除单表查询和子查询中的简单逗号分隔
+            if (Pattern.compile("(?i)FROM\\s+\\w+\\s*,\\s*\\w+").matcher(sql).find() ||
+                Pattern.compile("(?i)JOIN\\s+\\w+").matcher(sql).find()) {
+                SqlAnalyzeResult.OptimizationTip tip = createTip("RULE_CARTESIAN_PRODUCT", 10);
+                if (tip != null) tips.add(tip);
+            }
+        }
+    }
+
+    /**
+     * 检查SQL注入风险
+     */
+    private void checkSqlInjectionRisk(String sql, List<SqlAnalyzeResult.OptimizationTip> tips) {
+        if (!optimizationRuleService.isEnabled("RULE_SQL_INJECTION_RISK")) {
+            return;
+        }
+        // 检测字符串拼接特征：单引号闭合后接运算符或关键字
+        if (Pattern.compile("['\"]\\s*\\+\\s*['\"]").matcher(sql).find() ||
+            Pattern.compile("['\"]\\s*\\|\\|\\s*['\"]").matcher(sql).find() ||
+            Pattern.compile("['\"]\\s*;\\s*(?i)(SELECT|INSERT|UPDATE|DELETE|DROP)").matcher(sql).find() ||
+            Pattern.compile("(?i)\\$\\{[^}]+\\}").matcher(sql).find()) {
+            SqlAnalyzeResult.OptimizationTip tip = createTip("RULE_SQL_INJECTION_RISK", 10);
+            if (tip != null) tips.add(tip);
+        }
+    }
+
+    /**
+     * 检查不必要的DISTINCT
+     */
+    private void checkUnnecessaryDistinct(String sql, List<SqlAnalyzeResult.OptimizationTip> tips) {
+        if (!optimizationRuleService.isEnabled("RULE_UNNECESSARY_DISTINCT")) {
+            return;
+        }
+        // 如果查询的是主键或唯一索引列，DISTINCT是多余的
+        // 这里做简单检测：单表查询且SELECT列表包含id等主键特征
+        if (Pattern.compile("(?i)SELECT\\s+DISTINCT").matcher(sql).find()) {
+            SqlAnalyzeResult.OptimizationTip tip = createTip("RULE_UNNECESSARY_DISTINCT", 4);
+            if (tip != null) tips.add(tip);
+        }
+    }
+
+    /**
+     * 检查HAVING替代WHERE
+     */
+    private void checkHavingInsteadWhere(String sql, List<SqlAnalyzeResult.OptimizationTip> tips) {
+        if (!optimizationRuleService.isEnabled("RULE_HAVING_INSTEAD_WHERE")) {
+            return;
+        }
+        // HAVING中使用了聚合函数以外的条件
+        if (Pattern.compile("(?i)HAVING\\s+.*[^a-zA-Z0-9_](=|>|<|>=|<=|<>|!=)[^a-zA-Z0-9_]").matcher(sql).find()) {
+            // 简单判断：如果HAVING中没有聚合函数，可能是误用
+            String havingPart = sql.substring(sql.toUpperCase().indexOf("HAVING"));
+            if (!Pattern.compile("(?i)(COUNT|SUM|AVG|MAX|MIN)\\s*\\(").matcher(havingPart).find()) {
+                SqlAnalyzeResult.OptimizationTip tip = createTip("RULE_HAVING_INSTEAD_WHERE", 6);
+                if (tip != null) tips.add(tip);
+            }
+        }
+    }
+
+    /**
+     * 检查关联子查询
+     */
+    private void checkCorrelatedSubquery(String sql, List<SqlAnalyzeResult.OptimizationTip> tips) {
+        if (!optimizationRuleService.isEnabled("RULE_CORRELATED_SUBQUERY")) {
+            return;
+        }
+        // 检测EXISTS/IN子查询中引用外部表
+        if (Pattern.compile("(?i)EXISTS\\s*\\(\\s*SELECT").matcher(sql).find()) {
+            SqlAnalyzeResult.OptimizationTip tip = createTip("RULE_CORRELATED_SUBQUERY", 7);
+            if (tip != null) tips.add(tip);
+        }
+    }
+
+    /**
+     * 检查大字段查询
+     */
+    private void checkLargeFieldQuery(String sql, List<SqlAnalyzeResult.OptimizationTip> tips) {
+        if (!optimizationRuleService.isEnabled("RULE_LARGE_FIELD_QUERY")) {
+            return;
+        }
+        // 检测SELECT中包含TEXT/BLOB类型字段（通过常见命名或显式字段）
+        if (Pattern.compile("(?i)SELECT\\s+.*\\b(content|detail|description|text|blob|json|memo|remark)\\b").matcher(sql).find()) {
+            SqlAnalyzeResult.OptimizationTip tip = createTip("RULE_LARGE_FIELD_QUERY", 5);
+            if (tip != null) tips.add(tip);
+        }
+    }
+
+    /**
+     * 检查未使用绑定变量
+     */
+    private void checkNoBoundVariables(String sql, List<SqlAnalyzeResult.OptimizationTip> tips) {
+        if (!optimizationRuleService.isEnabled("RULE_NO_BOUND_VARIABLES")) {
+            return;
+        }
+        // 检测硬编码的字符串或数字常量（简单判断：WHERE条件中有具体值而非?或:param）
+        if (Pattern.compile("(?i)WHERE\\s+.*=\\s*['\"]\\w+['\"]|WHERE\\s+.*=\\s*\\d+").matcher(sql).find()) {
+            SqlAnalyzeResult.OptimizationTip tip = createTip("RULE_NO_BOUND_VARIABLES", 5);
+            if (tip != null) tips.add(tip);
+        }
+    }
+
+    /**
      * 基于EXPLAIN结果检查
      */
     private void checkExplainResult(List<Map<String, Object>> explainResult, List<SqlAnalyzeResult.OptimizationTip> tips) {
@@ -190,6 +373,32 @@ public class RuleEngine {
                             .anyMatch(t -> "RULE_MISSING_INDEX".equals(t.getRuleCode()));
                     if (!hasMissingIndex) {
                         SqlAnalyzeResult.OptimizationTip tip = createTip("RULE_MISSING_INDEX", 10);
+                        if (tip != null) tips.add(tip);
+                    }
+                }
+            }
+
+            // 检查文件排序
+            if (optimizationRuleService.isEnabled("RULE_FILESORT")) {
+                Object extra = row.get("Extra");
+                if (extra != null && extra.toString().contains("Using filesort")) {
+                    boolean hasFilesort = tips.stream()
+                            .anyMatch(t -> "RULE_FILESORT".equals(t.getRuleCode()));
+                    if (!hasFilesort) {
+                        SqlAnalyzeResult.OptimizationTip tip = createTip("RULE_FILESORT", 6);
+                        if (tip != null) tips.add(tip);
+                    }
+                }
+            }
+
+            // 检查临时表
+            if (optimizationRuleService.isEnabled("RULE_TEMPORARY_TABLE")) {
+                Object extra = row.get("Extra");
+                if (extra != null && extra.toString().contains("Using temporary")) {
+                    boolean hasTemp = tips.stream()
+                            .anyMatch(t -> "RULE_TEMPORARY_TABLE".equals(t.getRuleCode()));
+                    if (!hasTemp) {
+                        SqlAnalyzeResult.OptimizationTip tip = createTip("RULE_TEMPORARY_TABLE", 6);
                         if (tip != null) tips.add(tip);
                     }
                 }

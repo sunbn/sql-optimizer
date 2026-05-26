@@ -106,8 +106,8 @@ CREATE TABLE IF NOT EXISTS optimization_rule (
     INDEX idx_enabled (enabled)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='优化规则表';
 
--- 初始化优化规则数据
-INSERT INTO optimization_rule (rule_code, rule_name, rule_type, description, suggestion, priority, enabled) VALUES
+-- 初始化优化规则数据（IGNORE避免重复初始化时报错）
+INSERT IGNORE INTO optimization_rule (rule_code, rule_name, rule_type, description, suggestion, priority, enabled) VALUES
 ('RULE_SELECT_STAR', '避免SELECT *', 'PERFORMANCE', '使用SELECT *会返回所有列，增加网络传输和内存消耗', '明确指定需要的列，避免返回不必要的数据', 8, 1),
 ('RULE_MISSING_INDEX', '缺少索引', 'INDEX', 'WHERE条件中的列缺少索引，导致全表扫描', '为WHERE条件中的列添加索引', 10, 1),
 ('RULE_FULL_TABLE_SCAN', '全表扫描', 'PERFORMANCE', 'SQL执行计划中出现全表扫描', '优化查询条件或添加合适的索引', 9, 1),
@@ -117,7 +117,19 @@ INSERT INTO optimization_rule (rule_code, rule_name, rule_type, description, sug
 ('RULE_SUBQUERY', '子查询优化', 'PERFORMANCE', '子查询可能导致性能问题', '考虑使用JOIN替代子查询', 6, 1),
 ('RULE_ORDER_BY', 'ORDER BY优化', 'PERFORMANCE', 'ORDER BY使用不当可能导致文件排序', '确保ORDER BY列有索引', 5, 1),
 ('RULE_LIMIT_OFFSET', 'LIMIT大偏移量', 'PERFORMANCE', 'LIMIT大偏移量会导致扫描大量数据', '使用覆盖索引或优化分页方式', 7, 1),
-('RULE_IN_CLAUSE', 'IN子句数量过多', 'PERFORMANCE', 'IN子句中元素过多影响性能', '考虑使用临时表或分批处理', 5, 1);
+('RULE_IN_CLAUSE', 'IN子句数量过多', 'PERFORMANCE', 'IN子句中元素过多影响性能', '考虑使用临时表或分批处理', 5, 1),
+('RULE_INDEX_FUNCTION', '索引列上使用函数', 'INDEX', 'WHERE条件中对索引列使用函数会导致索引失效', '将函数应用到常量侧，或建立函数索引', 8, 1),
+('RULE_DELETE_WITHOUT_WHERE', 'DELETE缺少WHERE', 'SECURITY', 'DELETE语句缺少WHERE条件，会删除全表数据', '务必添加WHERE条件限制删除范围', 10, 1),
+('RULE_UPDATE_WITHOUT_WHERE', 'UPDATE缺少WHERE', 'SECURITY', 'UPDATE语句缺少WHERE条件，会更新全表数据', '务必添加WHERE条件限制更新范围', 10, 1),
+('RULE_CARTESIAN_PRODUCT', '笛卡尔积', 'PERFORMANCE', 'JOIN缺少ON条件，产生笛卡尔积', '为JOIN添加ON连接条件', 10, 1),
+('RULE_SQL_INJECTION_RISK', 'SQL注入风险', 'SECURITY', 'SQL存在字符串拼接或参数注入风险', '使用预编译语句和参数绑定', 10, 1),
+('RULE_UNNECESSARY_DISTINCT', '不必要的DISTINCT', 'PERFORMANCE', '对主键或唯一索引列使用DISTINCT是多余的', '移除不必要的DISTINCT关键字', 4, 1),
+('RULE_HAVING_INSTEAD_WHERE', 'HAVING替代WHERE', 'PERFORMANCE', '过滤条件应放在WHERE而非HAVING中', '将非聚合过滤条件移到WHERE子句', 6, 1),
+('RULE_CORRELATED_SUBQUERY', '关联子查询', 'PERFORMANCE', 'EXISTS关联子查询性能较差', '考虑使用JOIN或EXISTS改写', 7, 1),
+('RULE_LARGE_FIELD_QUERY', '大字段查询', 'PERFORMANCE', 'SELECT包含TEXT/BLOB等大字段，增加IO开销', '避免查询大字段，或单独查询', 5, 1),
+('RULE_NO_BOUND_VARIABLES', '未使用绑定变量', 'PERFORMANCE', 'SQL中使用硬编码常量，无法复用执行计划', '使用?或命名参数绑定变量', 5, 1),
+('RULE_FILESORT', '文件排序', 'PERFORMANCE', 'EXPLAIN出现Using filesort，排序效率低', '为ORDER BY列添加索引', 6, 1),
+('RULE_TEMPORARY_TABLE', '临时表使用', 'PERFORMANCE', 'EXPLAIN出现Using temporary，需要创建临时表', '优化GROUP BY或ORDER BY减少临时表', 6, 1);
 
 -- ============================================
 -- 优化规则管理示例 SQL（根据需求执行）
